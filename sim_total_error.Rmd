@@ -1,0 +1,88 @@
+---
+title: "Total Error: Using ML to Measure Total Exposure"
+author: "Gaurav"
+date: "06/17/2023"
+output: github_document
+---
+
+To investigate the impact of small bias in ML measures on estimates of total number of visits, etc., we simulated some data. The code simulates a browsing data as follows. We start by randomly choosing the number of domains visited by a respondent. We randomly sample a number between 5 and a 1000. Second, we simulate a multivariate normal with covariance of .9 to create two columns and take one of the columns to reflect the true measure. To the yhat column, we add a small bias--- .1 of the standard deviation of the true measure.
+
+```{r}
+library(MASS)
+set.seed(1234)
+
+num_respondents <- 1000
+
+# Covariance matrix for var. and measure
+cov_matrix <- matrix(c(1, 0.9, 0.9, 1), nrow = 2)
+
+# Create an empty data frame to store the simulated data
+fin_data <- data.frame()
+
+# Generate data for each respondent
+for (i in 1:num_respondents) {
+  # Random number of rows for the current respondent
+  num_rows <- sample(5:1000, 1)
+  
+  # Generate data for the current respondent
+  data <- data.frame(
+    respondent_id = i,
+    # Generate variable1 and correlated1 from multivariate normal distribution
+    as.data.frame(mvrnorm(num_rows, mu = c(0, 0), Sigma = cov_matrix))
+  )
+  names(data) <- c("respondent_id", "y", "yhat")
+  data$yhat <- data$yhat + .1 * (sd(data$y))
+  
+  fin_data <- rbind(fin_data, data)
+}
+
+summary(fin_data)
+```
+
+Next, we create a summary data frame that creates measures at the respondent level. We create measures that capture the mean and the total. 
+
+```{r}
+library(dplyr)
+
+# Group by respondent_id and calculate means and sums
+summary_data <- fin_data %>%
+  group_by(respondent_id) %>%
+  summarize(
+    mean_y = mean(y),
+    sum_y = sum(y),
+    nrows = n(),
+    mean_yhat = mean(yhat),
+    sum_yhat = sum(yhat),
+  )
+```
+
+Next, we check the consequences of bias on correlations. 
+
+As you can see, the original correlation (in the long form) is .9. As expected, the correlation between the means for the aggregated data is unaffected. But the correlation between the sums (which tally some version of total visits) is dramatically lower.
+
+```{r}
+with(fin_data, cor(y, yhat))
+with(summary_data, cor(mean_y, mean_yhat))
+with(summary_data, cor(sum_y, sum_yhat))
+```
+
+Part of the reason is that net bias is negatively correlated with the number of domains visited by the respondent.
+
+```{r}
+with(summary_data, cor(sum_y - sum_yhat, nrows))
+```
+
+The consequences for reporting raw numbers are yet clearer.
+```{r}
+summary(summary_data$sum_y)
+summary(summary_data$sum_yhat)
+
+summary(fin_data$y - fin_data$yhat)
+summary(summary_data$sum_y - summary_data$sum_yhat)
+```
+
+The solution for raw numbers is also clear:
+
+```{r}
+summary(summary_data$sum_yhat - summary_data$nrows*(.1)) # can multiply with the sd(y)
+```

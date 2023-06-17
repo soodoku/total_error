@@ -1,0 +1,76 @@
+\documentclass[12pt, letterpaper]{article}
+\usepackage[titletoc,title]{appendix}
+\usepackage{color}
+\usepackage{booktabs}
+\usepackage[tableposition=top]{caption}
+\newcommand\fnote[1]{\captionsetup{font=small}\caption*{#1}}
+
+\usepackage[usenames,dvipsnames,svgnames,table]{xcolor}
+\definecolor{dark-red}{rgb}{0.75,0.10,0.10} 
+\usepackage[margin=1in]{geometry}
+\usepackage[linkcolor=dark-red,
+            colorlinks=true,
+            urlcolor=blue,
+            pdfstartview={XYZ null null 1.00},
+            pdfpagemode=UseNone,
+            citecolor={dark-red},
+            pdftitle={Total Error}]{hyperref}
+%\usepackage{multibib}
+\usepackage{geometry} % see geometry.pdf on how to lay out the page. There's lots.
+\geometry{letterpaper}               % This is 8.5x11 paper. Options are a4paper or a5paper or other... 
+\usepackage{graphicx}                % Handles inclusion of major graphics formats and allows use of 
+\usepackage{amsfonts,amssymb,amsbsy}
+\usepackage{amsxtra}
+\usepackage{natbib}
+\DeclareRobustCommand{\firstsecond}[2]{#1}
+\usepackage{verbatim}
+\setcitestyle{round,semicolon,aysep={},yysep={;}}
+\usepackage{setspace}             % Permits line spacing control. Options are \doublespacing, \onehalfspace
+\usepackage{sectsty}             % Permits control of section header styles
+\usepackage{lscape}
+\usepackage{fancyhdr}             % Permits header customization. See header section below.
+\usepackage{url}                 % Correctly formats URLs with the \url{} tag
+\usepackage{fullpage}             %1-inch margins
+\usepackage{multirow}
+\usepackage{rotating}
+\setlength{\parindent}{3em}
+\usepackage{subcaption}
+
+%\usepackage[T1]{fontenc}
+%\usepackage{bm}
+\usepackage{lmodern}
+%\usepackage{libertine}
+%\usepackage{gfsdidot}
+\usepackage{chngcntr}
+
+\title{Total Error: Using ML to Measure Total Exposure\footnote{Simulation script can be downloaded from \url{http://github.com/soodoku/total_error}.}}
+
+\author{Gaurav Sood\thanks{Gaurav can be reached at \href{mailto:gsood07@gmail.com}\texttt{gsood07@gmail.com}}}
+\date{}
+\begin{document}
+\maketitle
+\doublespacing
+\pagenumbering{arabic}
+
+Say that we want to measure how much time people spend consuming pornography online \citep[e.g.,][]{shen2023holier}. To measure that, say that we use a model to predict whether or not a domain hosts pornography \citep[e.g.,][]{chintalapati2022}. Here below, we discuss some of the concerns about using scores from such a model and discuss ways to address the issues.
+
+Let's say we have $n$ users. We use $i$ to iterate over them. Let $k$ denote the total number of unique domains visited by all the users during the observation window. And we use $j$ to iterate over the domains. Let's denote the number of visits to domain $j$ by user $i$ by $c_{i j}=0,1,2, \ldots$. And let's denote the total number of unique domains a person visits $\left(\sum\left(c_{i j}==1\right)\right)$ using $t_{i}$. Lastly, let's denote predicted labels about whether or not each domain hosts pornography by $p$, so we have $p_{1}, \ldots, p_{j}$.
+
+Say there are five domains with predicted labels $p: 1_{1}, 1_{2}, 1_{3}, 1_{4}, 1_{5}$. Let's assume that for the chosen classification threshold, the False Positive Rate $(\mathrm{FPR})$ is $10\%$ and the False Negative Rate $(\mathrm{FNR})$ is $7\%$. Let's say user one visits the first three sites once and user two visits all five sites once. Given $10\%$ of the predictions are false positives, the total measurement error in user one's score $=3*.10$ and the total measurement error in user two's score $=5 *.10$. More generally, the total number of false positives increases as a function of predicted $1s$. But say that some domains have a predicted label of 0. The error incurred on those domains is a false negative. And the total number of false negatives increases with predicted $0s$. Combining the two points, the bias for user $i$ is:
+
+$$
+\sum_{1}^{k} c_{ij} *\left(p_{j}==1\right) *(FPR)-c_{ij} *\left(p_{j}==0\right) *(FNR)
+$$
+
+Formalizing allows us to clearly see that the net bias is a function of $FPR-FNR$ and $c_{ij}$. Keeping $FPR-FNR$ constant, the bias grows in $c_{ij}$. When $c_{ij}$ is right-skewed as is common in browsing data, misclassifying domains that people visit a lot can be very expensive---it may even change inferences wholesale.
+
+To illustrate the problem, we conduct a small simulation. We simulate measure for a 1000 respondents. We start by randomly choosing the number of domains visited by a respondent. We randomly sample a number between 5 and 1000. Second, we simulate a multivariate normal with a covariance of .9 to create two columns and take one of the columns to reflect the true measure. To the $\hat{y}$ column, we add a small bias--- .1 of the standard deviation of the true measure. We then aggregate this data at the respondent level and calculate the sum. As expected, the correlation between the means of the true and predicted measures in the aggregated data is also unaffected. But the correlation between the sums (which can be seen as a tally of total visits) is dramatically lower.
+
+One way to tackle the issue is to use different probability cutoffs for classification. Different probability cutoffs generate different $FNR$ and $FPR$ rates and allow us a way to provide bounds for the inferences.
+
+To directly tackle the problem of skew, we could tweak the cost function of the domain-level model such that the cost of each error is proportional to usage. But given the skew, it would put a metric ton of weight on the features of too few domains. And that may mean that the performance of the model is pretty bad. A better, simpler solution may be to hand code commonly visited domains.
+
+\clearpage
+\bibliographystyle{apsr}
+\bibliography{error}
+\end{document}
